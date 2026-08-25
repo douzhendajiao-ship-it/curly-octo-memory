@@ -1,0 +1,321 @@
+loadstring([[
+-- ============================================
+-- MOBILE PHYSICS KICK CHEAT (Tap to Kick)
+-- For Smartphones / Tablets
+-- Tap the big red button to kick!
+-- ============================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+-- ============================================
+-- CONFIGURATION
+-- ============================================
+local CONFIG = {
+    KickForce = 600,
+    KickRange = 20,
+    VerticalBoost = 0.4,
+}
+
+-- ============================================
+-- BIG TOUCH BUTTON (Full Screen / Big Button)
+-- ============================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KickCheat"
+ScreenGui.Parent = Player.PlayerGui
+ScreenGui.ResetOnSpawn = false
+
+-- Main Button (GIANT - takes half the screen)
+local KickButton = Instance.new("ImageButton")
+KickButton.Size = UDim2.new(0.8, 0, 0.25, 0)
+KickButton.Position = UDim2.new(0.1, 0, 0.7, 0)
+KickButton.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+KickButton.BorderColor3 = Color3.fromRGB(255, 200, 200)
+KickButton.BorderSizePixel = 4
+KickButton.Image = ""
+KickButton.ClipsDescendants = true
+KickButton.Parent = ScreenGui
+
+-- Label inside button
+local ButtonLabel = Instance.new("TextLabel")
+ButtonLabel.Size = UDim2.new(1, 0, 1, 0)
+ButtonLabel.Position = UDim2.new(0, 0, 0, 0)
+ButtonLabel.Text = "💥 KICK 💥"
+ButtonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ButtonLabel.TextScaled = true
+ButtonLabel.Font = Enum.Font.GothamBold
+ButtonLabel.BackgroundTransparency = 1
+ButtonLabel.Parent = KickButton
+
+-- Subtitle (smaller text)
+local SubLabel = Instance.new("TextLabel")
+SubLabel.Size = UDim2.new(1, 0, 0, 30)
+SubLabel.Position = UDim2.new(0, 0, 0.7, 0)
+SubLabel.Text = "TAP TO KICK!"
+SubLabel.TextColor3 = Color3.fromRGB(255, 255, 150)
+SubLabel.TextScaled = true
+SubLabel.Font = Enum.Font.Gotham
+SubLabel.BackgroundTransparency = 1
+SubLabel.Parent = KickButton
+
+-- ============================================
+-- STATUS DISPLAY (Small text at top)
+-- ============================================
+local StatusFrame = Instance.new("Frame")
+StatusFrame.Size = UDim2.new(0.6, 0, 0, 40)
+StatusFrame.Position = UDim2.new(0.2, 0, 0.02, 0)
+StatusFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+StatusFrame.BackgroundTransparency = 0.5
+StatusFrame.BorderSizePixel = 2
+StatusFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+StatusFrame.Parent = ScreenGui
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 1, 0)
+StatusLabel.Text = "✅ READY"
+StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+StatusLabel.TextScaled = true
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Parent = StatusFrame
+
+-- ============================================
+-- TARGET COUNTER (Show nearest target)
+-- ============================================
+local TargetFrame = Instance.new("Frame")
+TargetFrame.Size = UDim2.new(0.5, 0, 0, 35)
+TargetFrame.Position = UDim2.new(0.25, 0, 0.08, 0)
+TargetFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+TargetFrame.BackgroundTransparency = 0.4
+TargetFrame.BorderSizePixel = 1
+TargetFrame.BorderColor3 = Color3.fromRGB(100, 100, 200)
+TargetFrame.Parent = ScreenGui
+
+local TargetLabel = Instance.new("TextLabel")
+TargetLabel.Size = UDim2.new(1, 0, 1, 0)
+TargetLabel.Text = "🎯 No target"
+TargetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+TargetLabel.TextScaled = true
+TargetLabel.Font = Enum.Font.Gotham
+TargetLabel.BackgroundTransparency = 1
+TargetLabel.Parent = TargetFrame
+
+-- ============================================
+-- ANIMATION: PULSING BUTTON
+-- ============================================
+local function PulseButton()
+    TweenService:Create(KickButton, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    }):Play()
+    
+    TweenService:Create(KickButton, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        Size = UDim2.new(0.82, 0, 0.27, 0)
+    }):Play()
+end
+PulseButton()
+
+-- ============================================
+-- CORE KICK FUNCTION
+-- ============================================
+local function ExecuteKick()
+    local char = Player.Character
+    if not char then 
+        StatusLabel.Text = "❌ No character!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return 
+    end
+
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    if not rootPart then 
+        StatusLabel.Text = "❌ No RootPart!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return 
+    end
+
+    local origin = rootPart.Position + rootPart.CFrame.LookVector * 2
+    local direction = rootPart.CFrame.LookVector
+
+    -- Find nearest target (players + objects)
+    local nearestTarget = nil
+    local nearestDistance = CONFIG.KickRange
+    local targetName = ""
+
+    -- Check other players
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Player then
+            local targetChar = player.Character
+            if targetChar then
+                local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                if targetRoot then
+                    local dist = (rootPart.Position - targetRoot.Position).Magnitude
+                    if dist < nearestDistance then
+                        nearestTarget = targetRoot
+                        nearestDistance = dist
+                        targetName = player.Name
+                    end
+                end
+            end
+        end
+    end
+
+    -- Check physics objects (parts)
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if not part:IsDescendantOf(Player.Character) then
+                local dist = (rootPart.Position - part.Position).Magnitude
+                if dist < nearestDistance and dist < CONFIG.KickRange then
+                    nearestTarget = part
+                    nearestDistance = dist
+                    targetName = part.Name
+                end
+            end
+        end
+    end
+
+    if nearestTarget then
+        -- Calculate kick force
+        local kickDirection = (direction + Vector3.new(0, CONFIG.VerticalBoost, 0)).Unit
+        local force = kickDirection * CONFIG.KickForce
+
+        -- Apply force to target
+        if nearestTarget:IsA("BasePart") then
+            local bv = nearestTarget:FindFirstChildOfClass("BodyVelocity")
+            if not bv then
+                bv = Instance.new("BodyVelocity")
+                bv.Parent = nearestTarget
+            end
+            bv.Velocity = force
+            bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            game:GetService("Debris"):AddItem(bv, 0.4)
+
+            -- Visual feedback: flash red
+            nearestTarget.Color = Color3.fromRGB(255, 0, 0)
+            task.wait(0.08)
+            nearestTarget.Color = Color3.fromRGB(255, 255, 255)
+        end
+
+        -- Update status
+        StatusLabel.Text = "💢 KICKED: " .. targetName
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        TargetLabel.Text = "🎯 " .. targetName .. " (" .. math.floor(nearestDistance) .. " studs)"
+        TargetLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+
+        -- Button feedback (flash)
+        KickButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        task.wait(0.1)
+        KickButton.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+
+        -- Screen shake
+        local cam = workspace.CurrentCamera
+        if cam then
+            local origPos = cam.CFrame.Position
+            cam.CFrame = CFrame.new(origPos + Vector3.new(
+                math.random(-5, 5) * 0.15,
+                math.random(-5, 5) * 0.15,
+                0
+            ))
+            task.wait(0.06)
+            cam.CFrame = CFrame.new(origPos)
+        end
+
+        task.wait(0.8)
+        StatusLabel.Text = "✅ READY"
+        StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        -- No target found
+        StatusLabel.Text = "❌ No target nearby!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        TargetLabel.Text = "🎯 No target"
+        TargetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+
+        -- Shake button red (feedback)
+        KickButton.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+        task.wait(0.15)
+        KickButton.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+
+        task.wait(0.8)
+        StatusLabel.Text = "✅ READY"
+        StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    end
+end
+
+-- ============================================
+-- TOUCH / TAP HANDLER
+-- ============================================
+-- Tap the button = Kick!
+KickButton.MouseButton1Click:Connect(ExecuteKick)
+KickButton.MouseButton1Down:Connect(function()
+    KickButton.BackgroundColor3 = Color3.fromRGB(255, 200, 200)
+end)
+KickButton.MouseButton1Up:Connect(function()
+    task.wait(0.05)
+    KickButton.BackgroundColor3 = Color3.fromRGB(255, 40, 40)
+end)
+
+-- ============================================
+-- AUTO-TARGET DISPLAY (Updates every second)
+-- ============================================
+local function UpdateTargetDisplay()
+    while true do
+        task.wait(1)
+        
+        local char = Player.Character
+        if not char then 
+            TargetLabel.Text = "🎯 Waiting for character..."
+            TargetLabel.TextColor3 = Color3.fromRGB(200, 200, 0)
+            continue 
+        end
+        
+        local rootPart = char:FindFirstChild("HumanoidRootPart")
+        if not rootPart then continue end
+
+        local nearestDist = CONFIG.KickRange
+        local nearestName = "None"
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= Player then
+                local targetChar = player.Character
+                if targetChar then
+                    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                    if targetRoot then
+                        local dist = (rootPart.Position - targetRoot.Position).Magnitude
+                        if dist < nearestDist then
+                            nearestDist = dist
+                            nearestName = player.Name
+                        end
+                    end
+                end
+            end
+        end
+
+        if nearestName ~= "None" then
+            TargetLabel.Text = "🎯 " .. nearestName .. " (" .. math.floor(nearestDist) .. "s)"
+            TargetLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            TargetLabel.Text = "🎯 No target in range"
+            TargetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end
+    end
+end
+
+-- ============================================
+-- CHARACTER RESET
+-- ============================================
+Player.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    Humanoid = newChar:WaitForChild("Humanoid")
+end)
+
+-- ============================================
+-- START
+-- ============================================
+coroutine.wrap(UpdateTargetDisplay)()
+print("⚡ MOBILE KICK CHEAT LOADED!")
+print("   Just TAP the big red button!")
+
+]])
