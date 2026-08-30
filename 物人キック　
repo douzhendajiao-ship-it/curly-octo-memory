@@ -1,141 +1,18 @@
-using UnityEngine;
+local platform = script.Parent
 
-/// <summary>
-/// Physical kick controller for players/characters.
-/// Detects objects in front and applies explosive impulse force.
-/// Supports both rigidbody objects (physics kick) and enemies (knockback).
-/// </summary>
-public class PhysicsKick : MonoBehaviour
-{
-    [Header("Kick Parameters")]
-    [Tooltip("Maximum range of the kick detection.")]
-    [SerializeField] private float kickRange = 2.5f;
+local function disappear()
+    platform.CanCollide = false
+    platform.Transparency = 1
+end
 
-    [Tooltip("Radius of the sphere cast for hit detection.")]
-    [SerializeField] private float kickRadius = 0.6f;
+local function appear()
+    platform.CanCollide = true
+    platform.Transparency = 0
+end
 
-    [Tooltip("Raw impulse force applied to the target.")]
-    [SerializeField] private float kickForce = 600f;
-
-    [Tooltip("Vertical boost added to the kick (makes objects fly upward slightly).")]
-    [SerializeField] private float verticalBoost = 0.4f;
-
-    [Header("Filtering")]
-    [Tooltip("Layers that can be kicked.")]
-    [SerializeField] private LayerMask kickableLayers = ~0; // Everything by default
-
-    [Tooltip("Optional: Tag to filter specific targets (e.g., 'Enemy'). Leave empty to ignore.")]
-    [SerializeField] private string targetTag = "";
-
-    [Header("Input")]
-    [Tooltip("Key to perform the kick.")]
-    [SerializeField] private KeyCode kickKey = KeyCode.F;
-
-    [Header("Optional Effects")]
-    [Tooltip("Visual effect prefab to spawn at impact point (optional).")]
-    [SerializeField] private GameObject impactEffectPrefab;
-
-    // Cache the player's transform for performance
-    private Transform playerTransform;
-
-    private void Start()
-    {
-        playerTransform = transform;
-    }
-
-    private void Update()
-    {
-        // Perform kick when the assigned key is pressed
-        if (Input.GetKeyDown(kickKey))
-        {
-            ExecuteKick();
-        }
-    }
-
-    /// <summary>
-    /// Core method: Detects targets using a sphere cast and applies physics force.
-    /// </summary>
-    private void ExecuteKick()
-    {
-        // Origin is slightly forward to prevent kicking the player's own collider
-        Vector3 origin = playerTransform.position + playerTransform.forward * 0.5f;
-        Vector3 direction = playerTransform.forward;
-
-        // SphereCast detects all colliders in a capsule-like volume in front
-        if (Physics.SphereCast(origin, kickRadius, direction, out RaycastHit hit, kickRange, kickableLayers))
-        {
-            // Get the target object
-            GameObject target = hit.collider.gameObject;
-
-            // Optional: Skip if the target doesn't match the required tag
-            if (!string.IsNullOrEmpty(targetTag) && !target.CompareTag(targetTag))
-            {
-                Debug.Log($"[Kick] Target '{target.name}' does not have tag '{targetTag}'. Skipped.");
-                return;
-            }
-
-            // --- Case 1: Physics Object (Rigidbody) ---
-            if (target.TryGetComponent<Rigidbody>(out Rigidbody rb))
-            {
-                // Calculate kick direction: forward + upward arc
-                Vector3 kickDirection = (direction + Vector3.up * verticalBoost).normalized;
-
-                // Apply impulse force (instant burst)
-                rb.AddForce(kickDirection * kickForce, ForceMode.Impulse);
-
-                // Slight random torque for realistic spinning
-                Vector3 randomTorque = new Vector3(
-                    Random.Range(-50f, 50f),
-                    Random.Range(-50f, 50f),
-                    Random.Range(-50f, 50f)
-                );
-                rb.AddTorque(randomTorque, ForceMode.Impulse);
-
-                Debug.Log($"[Kick] <color=cyan>Kicked {target.name}</color> with {kickForce}N. Direction: {kickDirection}");
-            }
-            // --- Case 2: Enemy AI / Character without Rigidbody (Custom Knockback) ---
-            else if (target.TryGetComponent<CharacterController>(out _) || target.TryGetComponent<Collider>(out _))
-            {
-                // Alternative knockback for non-physics characters (e.g., via CharacterController.Move)
-                // You can implement custom knockback logic here, or simply send a message.
-                target.SendMessage("OnKnockback", (direction + Vector3.up * verticalBoost) * kickForce * 0.1f, SendMessageOptions.DontRequireReceiver);
-                Debug.Log($"[Kick] <color=yellow>Knockback triggered on {target.name}</color>");
-            }
-
-            // --- Spawn Impact Visual Effect ---
-            if (impactEffectPrefab != null)
-            {
-                Instantiate(impactEffectPrefab, hit.point, Quaternion.LookRotation(hit.normal));
-            }
-        }
-        else
-        {
-            // Optional: Debug feedback when kick misses
-            Debug.Log("[Kick] No target detected within range.");
-        }
-    }
-
-    /// <summary>
-    /// Visualizes the kick range and sphere cast in the Editor.
-    /// </summary>
-    private void OnDrawGizmosSelected()
-    {
-        if (playerTransform == null && !Application.isPlaying)
-            playerTransform = transform;
-
-        Vector3 origin = playerTransform.position + playerTransform.forward * 0.5f;
-        Vector3 end = origin + playerTransform.forward * kickRange;
-
-        // Draw the sphere at the maximum range
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(end, kickRadius);
-
-        // Draw a line showing the kick direction
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawLine(origin, end);
-
-        // Draw a semi-transparent capsule representation
-        Gizmos.color = new Color(1, 0, 0, 0.2f);
-        Gizmos.DrawSphere(origin, kickRadius * 0.3f);
-    }
-}
+while true do
+   task.wait(3)
+   disappear()
+   task.wait(3)
+   appear()
+end
