@@ -1,18 +1,186 @@
-local platform = script.Parent
+-- サービスとリモートの取得
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
-local function disappear()
-    platform.CanCollide = false
-    platform.Transparency = 1
+local LocalPlayer = Players.LocalPlayer
+local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
+local DestroyGrabLine = GrabEvents:WaitForChild("DestroyGrabLine")
+local SetNetworkOwner = GrabEvents:WaitForChild("SetNetworkOwner")
+
+-- UI (Orion Library)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/BlizTBr/scripts/main/Orion%20X"))()
+local Window = Library:MakeWindow({
+    Name = "Kick Only Menu",
+    HidePremium = true,
+    SaveConfig = true,
+    ConfigFolder = "KickMenu",
+    IntroEnabled = false,
+    KeyToOpenWindow = "M",
+    FreeMouse = true
+})
+
+local PlayerTab = Window:MakeTab({ Name = "Player Kick", Icon = "rbxassetid://7743871002" })
+local AuraTab = Window:MakeTab({ Name = "Auras", Icon = "rbxassetid://7733955740" })
+local MiscTab = Window:MakeTab({ Name = "Kick All", Icon = "rbxassetid://7733917120" })
+
+-- ヘルパー関数
+function lookAt(pos1, pos2)
+    local dir = (pos2 - pos1).Unit
+    local right = dir:Cross(Vector3.new(0, 1, 0))
+    local up = right:Cross(dir)
+    return CFrame.fromMatrix(pos1, right, up)
 end
 
-local function appear()
-    platform.CanCollide = true
-    platform.Transparency = 0
+function CheckNetworkOwnerShipOnPlayer(player)
+    if player and player.Character and player.Character:FindFirstChild("Head") then
+        local partOwner = player.Character.Head:FindFirstChild("PartOwner")
+        if partOwner and partOwner.Value == LocalPlayer.Name then
+            return true
+        end
+    end
+    return false
 end
 
-while true do
-   task.wait(3)
-   disappear()
-   task.wait(3)
-   appear()
+function SNOWship(part)
+    if part and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        if LocalPlayer:DistanceFromCharacter(part.Position) <= 30 then
+            SetNetworkOwner:FireServer(part, lookAt(LocalPlayer.Character.HumanoidRootPart.Position, part.Position))
+        end
+    end
 end
+
+function SNOWshipPlayer(player)
+    if player and player.Character and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local root = player.Character:FindFirstChild("HumanoidRootPart")
+        if root and not CheckNetworkOwnerShipOnPlayer(player) then
+            if LocalPlayer:DistanceFromCharacter(root.Position) <= 30 then
+                SetNetworkOwner:FireServer(root, lookAt(LocalPlayer.Character.HumanoidRootPart.Position, root.Position))
+            end
+        end
+        return true
+    end
+    return false
+end
+
+function CreateSkyVelocity(part)
+    if part and not part:FindFirstChild("SkyVelocity") then
+        local bv = Instance.new("BodyVelocity", part)
+        bv.Name = "SkyVelocity"
+        bv.Velocity = Vector3.new(0, 100000000000000, 0)
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    end
+end
+
+function DoKick(player)
+    if player and player.Character then
+        local root = player.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            for i = 1, 50 do
+                if CheckNetworkOwnerShipOnPlayer(player) or root.AssemblyLinearVelocity.Magnitude > 500 then
+                    CreateSkyVelocity(root)
+                    DestroyGrabLine:FireServer(root)
+                    break
+                end
+                SNOWship(root)
+                task.wait()
+                if root.Position.Y <= -12 then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(root.Position + Vector3.new(0, 5, -15))
+                else
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(root.Position + Vector3.new(0, -10, -10))
+                end
+            end
+        end
+    end
+end
+
+-- プレイヤーリスト自動更新
+local function UpdatePlayerList(Dropdown)
+    local List = {}
+    for _, Player in pairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer then
+            table.insert(List, Player.Name .. " (" .. Player.DisplayName .. ")")
+        end
+    end
+    table.sort(List)
+    Dropdown:Refresh(List, true)
+end
+
+Players.PlayerAdded:Connect(function() UpdatePlayerList(PlayerToKick) end)
+Players.PlayerRemoving:Connect(function() UpdatePlayerList(PlayerToKick) end)
+
+-- 1. 特定プレイヤーへのKick
+local Section1 = PlayerTab:AddSection({ Name = "Select Player" })
+local PlayerToKick
+PlayerToKick = Section1:AddDropdown({
+    Name = "Select Player",
+    Default = "",
+    Options = { "" },
+    Callback = function(Value)
+        _G.TargetKick = string.split(Value, " ")[1]
+    end
+})
+Section1:AddButton({
+    Name = "KICK!",
+    Callback = function()
+        local Target = Players:FindFirstChild(_G.TargetKick)
+        if Target then DoKick(Target) end
+    end
+})
+UpdatePlayerList(PlayerToKick)
+
+-- 2. Kick Aura（周囲の全員を吹き飛ばす）
+local Section2 = AuraTab:AddSection({ Name = "Kick Aura" })
+Section2:AddToggle({
+    Name = "Kick Aura",
+    Default = false,
+    Callback = function(Value)
+        _G.KickAura = Value
+        if Value then
+            while _G.KickAura do
+                for _, Player in pairs(Players:GetPlayers()) do
+                    if Player ~= LocalPlayer and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                        if Player.Character.Humanoid.Health > 0 and not Player.Character:GetAttribute("Kicking") then
+                            if SNOWshipPlayer(Player) then
+                                Player.Character:SetAttribute("Kicking", true)
+                                CreateSkyVelocity(Player.Character.HumanoidRootPart)
+                                DestroyGrabLine:FireServer(Player.Character.HumanoidRootPart)
+                                task.wait()
+                                Player.Character:SetAttribute("Kicking", nil)
+                            end
+                        end
+                    end
+                end
+                task.wait()
+            end
+        end
+    end
+})
+
+-- 3. Kick All（全員を吹き飛ばす）
+local Section3 = MiscTab:AddSection({ Name = "Kick All" })
+Section3:AddToggle({
+    Name = "Kick All",
+    Default = false,
+    Callback = function(Value)
+        _G.KickAll = Value
+        if Value then
+            local SavedPos = LocalPlayer.Character.HumanoidRootPart.CFrame
+            while _G.KickAll do
+                for _, Player in pairs(Players:GetPlayers()) do
+                    if Player ~= LocalPlayer and Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+                        if not Player:FindFirstChild("InPlot") or Player.InPlot.Value == false then
+                            DoKick(Player)
+                        end
+                    end
+                end
+                task.wait(0.2)
+            end
+            LocalPlayer.Character.HumanoidRootPart.CFrame = SavedPos
+        end
+    end
+})
+
+Library:Init()
