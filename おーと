@@ -1,0 +1,138 @@
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+-- GUI作成
+local gui = Instance.new("ScreenGui")
+gui.Name = "CheatGUI"
+gui.ResetOnSpawn = false
+gui.Parent = lp:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 180)
+frame.Position = UDim2.new(0.1, 0, 0.1, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.Active = true
+frame.Parent = gui
+
+-- ドラッグで動かせるようにする
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    frame.Position = UDim2.new(
+        startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y
+    )
+end
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if dragging and input == dragInput then
+        update(input)
+    end
+end)
+
+-- トグルボタン作成
+local function makeToggle(name, y, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 200, 0, 30)
+    btn.Position = UDim2.new(0, 10, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = name .. ": OFF"
+    btn.Parent = frame
+    local state = false
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        btn.Text = name .. ": " .. (state and "ON" or "OFF")
+        callback(state)
+    end)
+end
+
+-- ESP
+local espEnabled = false
+local highlights = {}
+makeToggle("ESP", 10, function(v)
+    espEnabled = v
+    if v then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= lp and plr.Character then
+                local hl = Instance.new("Highlight")
+                hl.FillColor = Color3.fromRGB(255, 0, 0)
+                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                hl.Parent = plr.Character
+                highlights[plr] = hl
+            end
+        end
+    else
+        for _, hl in pairs(highlights) do
+            if hl then hl:Destroy() end
+        end
+        highlights = {}
+    end
+end)
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(char)
+        if espEnabled then
+            local hl = Instance.new("Highlight")
+            hl.FillColor = Color3.fromRGB(255, 0, 0)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.Parent = char
+            highlights[plr] = hl
+        end
+    end)
+end)
+
+-- 無限ジャンプ
+local infJump = false
+makeToggle("無限ジャンプ", 50, function(v) infJump = v end)
+UIS.JumpRequest:Connect(function()
+    if infJump and lp.Character then
+        local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- オートAIM
+local autoAim = false
+makeToggle("オートAIM", 90, function(v) autoAim = v end)
+RunService.RenderStepped:Connect(function()
+    if not autoAim then return end
+    local closest, dist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and plr.Character then
+            local head = plr.Character:FindFirstChild("Head")
+            if head then
+                local d = (head.Position - lp.Character.HumanoidRootPart.Position).Magnitude
+                if d < dist then
+                    dist, closest = d, head
+                end
+            end
+        end
+    end
+    if closest then
+        workspace.CurrentCamera.CFrame = CFrame.new(
+            workspace.CurrentCamera.CFrame.Position,
+            closest.Position
+        )
+    end
+end)
